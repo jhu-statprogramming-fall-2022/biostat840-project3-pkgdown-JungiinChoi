@@ -7,7 +7,7 @@
 Original Package Link: https://github.com/cran/LogConcDEAD
 
 Deployed Pkgdown Website:
-https://github.com/jhu-statprogramming-fall-2022/biostat840-project3-pkgdown-JungiinChoi
+https://jhu-statprogramming-fall-2022.github.io/biostat840-project3-pkgdown-JungiinChoi
 
 Original Package Author: Yining Chen
 
