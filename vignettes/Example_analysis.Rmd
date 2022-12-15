@@ -1,0 +1,205 @@
+---
+title: "Example_analysis"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Example_analysis}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## 0. Load libraries
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(LogConcDEAD)
+```
+
+## 0. Data Description
+
+### Load Data from `TidyTuesday`
+
+```{r message=FALSE, warning=FALSE}
+if (!dir.exists("data")){
+  dir.create("data")
+  sports <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-03-29/sports.csv')
+  write.csv(sports,"data/sports.csv")
+}
+sports <- read.csv("data/sports.csv")[,-1]
+head(sports)
+```
+
+This data comes from [Equity in Athletics Data Analysis](https://ope.ed.gov/athletics/#/datafile/list), hattip to [Data is Plural](https://www.data-is-plural.com/archive/2020-10-21-edition/).
+
+This data is consist of year, school, and many other variables related to collegiate sports in Unites States. Please see the Schoolsdoc file in each folder (EADA_2016-2017, etc) for the definitions of additional columns.
+
+### Data Dictionary
+
+# `sports.csv`
+
+|variable             |class     |description |
+|:--------------------|:---------|:-----------|
+|year                 |integer   | year, which is year: year + 1, eg 2015 is 2015 to 2016 |
+|unitid               |double    | School ID |
+|institution_name     |character | School name |
+|city_txt             |character | City name |
+|state_cd             |character | State abbreviation |
+|zip_text             |character | Zip of school |
+|classification_code  |double    | Code for school classification |
+|classification_name  |character | School classification |
+|classification_other |character | School classification other |
+|ef_male_count        |double    | Total male student  |
+|ef_female_count      |double    | Total Female student  |
+|ef_total_count       |double    | Total student  for binary male/female gender (sum of previous two cols) |
+|sector_cd            |double    | Sector code |
+|sector_name          |character | Sector name |
+|sportscode           |double    | Sport code |
+|partic_men           |double    | Participation men  |
+|partic_women         |double    | Participation women |
+|partic_coed_men      |double    | Participation as coed men |
+|partic_coed_women    |double    | Participation for coed women|
+|sum_partic_men       |double    | Sum of participation for men |
+|sum_partic_women     |double    | Sum of participation women |
+|rev_men              |double    | Revenue in USD for men |
+|rev_women            |double    | Revenue in USD for women |
+|total_rev_menwomen   |double    | Total revenue for both|
+|exp_men              |double    | Expenditures in USD for men |
+|exp_women            |double    | Expenditures in USD for women |
+|total_exp_menwomen   |double    | Total Expenditure for both |
+|sports               |character | Sport name |
+
+
+## 1. Types of Sports
+
+**Analysis Question** Q. What types of sports do students play the most in United States? and How are they distributed?
+
+```{r}
+sports_df <-sports %>%
+  select(c("state_cd","total_rev_menwomen","total_exp_menwomen","sports")) %>%
+  filter(!is.na(total_rev_menwomen),!is.na(total_exp_menwomen),!is.na(sports)) %>%
+  rename(state = state_cd, revenue = total_rev_menwomen, expend = total_exp_menwomen) %>%
+  mutate(sports = factor(sports))
+
+sports_df %>%
+  group_by(sports) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(x=count, y = reorder(sports, count))) +
+  geom_bar(stat='identity') +
+  xlab("Count") +
+  ylab("Sports") +
+  labs(title = "Types of Sports in US Schools", 
+       subtitle = "from 2016 to 2017",
+       caption = "In descending order of the counts of each sport type")
+```
+
+Basketball, Volleyball and Soccer are the top three sports reported in this data which show more than 8000 counts. 
+
+## 2. Total Expenditures/Revenue for Each State
+
+**Analysis Question** Q. Are there positive correlation between total expenditures and total revenue in sports for students in US schools?
+
+```{r}
+sports_df %>%
+  split(.$state) %>%
+  map(~ lm(revenue ~ expend, data=.)) %>%
+  map(summary) %>%
+  map_dbl("r.squared")
+```
+
+In terms of `r.squared` statistics in simple linear regression, We can observe that there is a significant linear correlation bewteen those two. 
+
+
+```{r}
+top10 <- sports_df %>%
+  group_by(state) %>%
+  summarise(count=n())%>%
+  top_n(n=8, wt = count) %>%
+  select("state")
+
+sports_df %>% 
+  filter(state %in% top10$state) %>%
+  ggplot(aes(x=expend, y = revenue)) +
+  geom_line()+
+  facet_wrap(~state) +
+  xlab("Total Expenditures in USD") +
+  ylab("Total Revenue in USD") +
+  labs(title = "Relationship between Expenditures and Revenue for sports in US", 
+       subtitle = "by states with larger given dataset",
+       caption = "There is a positive correlation between the expenditure and revenues")
+```
+
+For simpler visualization, we selected top 10 states with larger dataset and it definitely shows positive relationship between expenditures and revenue in sports for students in US schools.
+
+## 3. MLE estimates for Expenditures/Revenue
+
+**Analysis Question** Q. What is the estimated density of each expenditure and revenue for all collegiate sports in United States?
+
+```{r}
+sports_df %>% 
+  filter(state== "MD", expend < 1000000) %>%
+  ggplot(aes(x=expend)) +
+  geom_histogram() +
+  xlab("Expenditures") +
+  ylab("Count") +
+  labs(title = "Distribution of Expenditure(USD) in Collegial Sports", 
+       subtitle = "in Maryland",
+       caption = "It's mean is $196,205 and median is $114,522")
+```
+
+Distribution of Expenditures in Maryland Collegial sports is right-skewed with mean value $196,205. 
+
+```{r warning=FALSE, message=FALSE}
+MD <- sports_df %>% filter(state== "MD", expend < 200000, revenue < 200000)
+hist(MD$expend)
+hist(MD$revenue)
+MD_df = cbind(MD$expend,MD$revenue)
+lcd <- mlelcd(MD_df)
+g <- interplcd(lcd)
+plot(lcd, g=g, type="c", uselog=TRUE)
+plot(lcd, g=g, type="i", uselog=TRUE)
+```
+
+We only selected data from Maryland data without too large values to avoid outliers and maintain log-concave distribution. 
+
+We can observe how are 2-dimensional density of Expenditures/Revenue distributed using `LogConcDEAD`. It shows elliptical distribution centered in its mean value. 
+
+
+## 4. List of Functions
+
+### dplyr
+
+-   filter()
+-   mutate()
+-   select()
+-   rename()
+-   group_by()
+-   summarise()
+
+### purrr
+
+-   map()
+-   map_dbl()
+
+### ggplot2
+
+-   geom_bar()
+-   geom_line()
+-   geom_histogram()
+-   facet_wrap()
+
+### LogConcDEAD
+
+-   mlelcd()
+-   interplcd()
+
+
+
+
+
+
