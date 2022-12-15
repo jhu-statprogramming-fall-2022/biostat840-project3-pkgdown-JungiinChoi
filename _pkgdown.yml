@@ -7,8 +7,6 @@ template:
     bg: "#202123"
     fg: "#B8BCC2"
     primary: "#306cc9"
-development:
-  mode: auto
 navbar:
   structure:
     left:  [search]
